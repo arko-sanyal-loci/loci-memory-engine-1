@@ -1,166 +1,45 @@
-# loci-memory-engine
+# ⚠️ This Repository Has Been Archived
 
-A local, offline RAG (retrieval-augmented generation) pipeline over your own documents, built on
-Ollama — plus **LOCI**, a heat-tiered memory engine growing underneath it that adds
-category-adaptive retrieval, decaying entity/fact memory, and (eventually) goals, thoughts, and
-forecasting on top of plain document chunk search.
+**This repository (`arko-sanyal-loci/loci-memory-engine-1`) is no longer maintained.**
 
-Everything runs locally: embeddings and generation go through [Ollama](https://ollama.com), and
-storage is one SQLite file (`sqlite-vec` for dense vector search + `FTS5` for lexical search,
-fused via Reciprocal Rank Fusion) plus the LOCI heat/fact tables. No cloud calls, no API keys.
+All development has been consolidated into the canonical Billo Tech repository:
 
-## What it does today
+## → [arko-sanyal-loci/LOCI-MEMORY-ENGINE](https://github.com/arko-sanyal-loci/LOCI-MEMORY-ENGINE)
 
-- **`rag ingest`** — chunk your documents (`.pdf`, `.txt`, `.md`) and embed them into the store.
-- **`rag query`** — ask a question; the pipeline classifies the query into one of four categories
-  (information extraction, knowledge update, multi-session reasoning, temporal reasoning — per
-  [CARD](https://github.com/arko-sanyal/loci-card-papers/blob/master/papers/04_Category-Adaptive-Recall-Depth-CARD.pdf)),
-  retrieves at a category-appropriate depth, and answers using only the retrieved context.
-- **`loci-engine/`** — a growing heat-tiered memory core (`isymprev`/`qsymprev` schema, a
-  decay/reinforcement/tiering heat law, and a `LociEngine` facade) that CARD's ranking and the
-  ingestion path will progressively wire into as it's built out — see
-  [`loci-engine/INDEX.md`](loci-engine/INDEX.md) for exactly what's built vs. planned right now.
+---
 
-## Install
+### What this repo was
 
-Requires Python 3.11+ and [Ollama](https://ollama.com) running locally with two models pulled:
+`loci-memory-engine-1` was an early LOCI product combining:
+1. An Ollama-based RAG pipeline for local document ingestion and retrieval
+2. An early/simplified LOCI memory engine (`loci-engine/loci_engine/`)
 
-```bash
-ollama pull nomic-embed-text
-ollama pull llama3.2
-ollama serve   # if not already running
+It was the first working prototype of CARD (Category-Adaptive Recall Depth) in a RAG context,
+using sqlite-vec + FTS5 + Reciprocal Rank Fusion for hybrid search.
 
-python3 -m venv .venv
-.venv/bin/pip install -e '.[dev]'
-```
+### What was ported to the canonical repo
 
-## Usage
+**Fully ported (find it at `rag/` in the canonical repo):**
+- `rag/card.py` — CARD query classification and ranking strategy
+- `rag/chunker.py` — LangChain recursive text splitter
+- `rag/embeddings.py` — Ollama embedding client
+- `rag/llm.py` — Ollama generation client (compact + expand lanes)
+- `rag/loader.py` — PDF / TXT / MD document loader
+- `rag/pipeline.py` — End-to-end ingest + query pipeline
+- `rag/cli.py` — `rag ingest` / `rag query` CLI
+- `rag/config.py` — Environment-based configuration
 
-```bash
-# put .pdf/.txt/.md files in ./data (or point --data-dir elsewhere)
-python -m rag ingest --data-dir ./data
+**Superseded by canonical:**
+- `loci-engine/loci_engine/` — The simplified LOCI engine here has been superseded by the
+  full 28-module implementation in the canonical repo. The canonical repo's `heat.py`,
+  `storage.py`, `store.py`, and `mcp_server.py` cover and extend everything this contained.
 
-python -m rag query "What does paper 05 say about goal-conditioned decay?"
-python -m rag query "What changed recently?" --top-k 3   # override the category-adaptive depth
-```
+### For historical reference
 
-Both commands print a clear error (not a stack trace) if Ollama isn't reachable, or if the data
-directory is missing/empty.
+`loci-engine/INDEX.md` contains the original module-by-module status table and design notes.
+This remains readable for historical context.
 
-## Configuration
+---
 
-All environment-overridable, in `rag/config.py`:
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `RAG_OLLAMA_HOST` | `http://127.0.0.1:11434` | Ollama server URL |
-| `RAG_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
-| `RAG_LLM_MODEL` | `llama3.2` | Generation model |
-| `RAG_CHROMA_DB_PATH` | `./chroma_db` | SQLite file backing the chunk store (name is historical — it's `sqlite-vec`+`FTS5` now, not Chroma) |
-| `RAG_DATA_DIR` | `./data` | Where `ingest` reads documents from |
-| `RAG_CHUNK_SIZE` / `RAG_CHUNK_OVERLAP` | `500` / `50` | Chunking parameters |
-| `RAG_LOCI_DB_PATH` | — | Path for the LOCI heat/fact store (see `loci-engine/INDEX.md` for current knobs) |
-
-## Connect LOCI to your own agent
-
-`loci_engine` is usable on its own, independent of the `rag` pipeline above — as a Python library,
-or as an MCP server any MCP-compatible agent (Claude Code, Claude Desktop, or your own) can call
-directly.
-
-**Scope, honestly stated:** this gives you entity/fact memory with heat-based decay and
-reinforcement, plus hybrid (dense + lexical) chunk search. It does **not** yet include fact
-versioning, goal tracking, forecasting, or reflection — see
-[`loci-engine/INDEX.md`](loci-engine/INDEX.md) and [`Sonnet-01.md`](Sonnet-01.md) for exactly
-what's built versus planned before you depend on anything beyond that.
-
-### As a Python library
-
-```bash
-.venv/bin/pip install -e .
-```
-
-```python
-from loci_engine import LociEngine
-
-engine = LociEngine("./my_agent_memory.sqlite3")
-
-engine.remember("user_timezone", gist="UTC-5, prefers evening check-ins")
-engine.add_fact("user_timezone", "offset", "-5", unit="hours", source="user-stated")
-
-entity = engine.recall("user_timezone")  # increments heat on access
-facts = engine.get_facts("user_timezone")
-
-# Hybrid semantic search — you supply the embedding (this library has no
-# opinion on which embedding model you use)
-engine.add_chunk("note-1", embedding=[...], text="the user prefers dark mode")
-results = engine.query(embedding=[...], top_k=5, query_text="UI preferences")
-
-engine.close()
-```
-
-### As an MCP server
-
-```bash
-.venv/bin/pip install -e '.[mcp]'
-LOCI_DB_PATH=./my_agent_memory.sqlite3 scripts/run_loci_mcp.sh
-```
-
-Exposes six tools over stdio: `loci_remember`, `loci_recall`, `loci_add_fact`, `loci_get_facts`,
-`loci_add_chunk`, `loci_query` — same semantics as the library methods above. Point your agent's
-MCP config at the launcher script, e.g. in `.mcp.json` or `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "loci-memory": {
-      "command": "bash",
-      "args": ["/absolute/path/to/scripts/run_loci_mcp.sh"],
-      "env": { "LOCI_DB_PATH": "/absolute/path/to/my_agent_memory.sqlite3" }
-    }
-  }
-}
-```
-
-No agent identity or authorization scheme is needed here — unlike
-[loci-coordination-bus](https://github.com/arko-sanyal/loci-coordination-bus) (a shared, multi-party
-bus), this is a single local memory store for one agent's own use, scoped by whatever file path you
-give it.
-
-## Running the tests
-
-```bash
-.venv/bin/pip install -e '.[dev]'
-.venv/bin/pytest -q
-```
-
-Tests that need a live Ollama connection skip automatically when one isn't reachable; everything
-else runs offline.
-
-## Project structure
-
-```
-rag/                  the RAG pipeline: ingest, chunk, embed, query, CARD categorization, CLI
-loci-engine/           the LOCI memory engine package (loci_engine/), its module index, and schema
-docs/superpowers/      the design spec and implementation plans this was built from
-data/                  default document ingestion directory (gitignored contents)
-tests/                 pytest suite, mirrors the module layout above
-```
-
-## Related repos
-
-This project used to bundle two things that don't actually depend on it — they've moved out so
-each piece can be used, versioned, and documented on its own:
-
-- **[loci-coordination-bus](https://github.com/arko-sanyal/loci-coordination-bus)** — the secure,
-  local-first coordination bus (event log + task board + MCP server) used when multiple coding
-  agents work on this repo at once. Install it as a dependency rather than expecting it inline.
-- **[loci-card-papers](https://github.com/arko-sanyal/loci-card-papers)** — the nine LOCI/CARD
-  research papers this engine implements, with a one-paragraph summary of what each contributes.
-
-## Documentation
-
-- [`docs/superpowers/specs/2026-09-10-loci-memory-engine-design.md`](docs/superpowers/specs/2026-09-10-loci-memory-engine-design.md) —
-  the full design spec: schema, heat laws, read/write paths, interfaces, and what's deferred.
-- [`loci-engine/INDEX.md`](loci-engine/INDEX.md) — a living module-by-module status table (which
-  paper each module implements, what's done, what's planned).
-- [`docs/STATUS-*.md`](docs) — dated status logs from past work sessions.
+*Canonical repo: https://github.com/arko-sanyal-loci/LOCI-MEMORY-ENGINE*
+*Consolidated: November 2026 by Arko Sanyal (Billo Tech)*
