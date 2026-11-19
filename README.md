@@ -1,10 +1,10 @@
-# ⚠️ This Repository Has Been Archived
+# [legacy] loci-memory-engine-1
 
-**This repository (`arko-sanyal-loci/loci-memory-engine-1`) is no longer maintained.**
+**This repository (`arko-sanyal-loci/loci-memory-engine-1`) is [legacy] and no longer maintained.**
 
 All development has been consolidated into the canonical Billo Tech repository:
 
-## → [arko-sanyal-loci/LOCI-MEMORY-ENGINE](https://github.com/arko-sanyal-loci/LOCI-MEMORY-ENGINE)
+## → [arko-sanyal-loci/loci-memory-engine](https://github.com/arko-sanyal-loci/loci-memory-engine)
 
 ---
 
@@ -41,5 +41,5 @@ This remains readable for historical context.
 
 ---
 
-*Canonical repo: https://github.com/arko-sanyal-loci/LOCI-MEMORY-ENGINE*
+*Canonical repo: https://github.com/arko-sanyal-loci/loci-memory-engine*
 *Consolidated: November 2026 by Arko Sanyal (Billo Tech)*
